@@ -1,0 +1,13 @@
+Como correr o programa:
+
+-Docker
+-Docker-Compose
+
+1. consola, executar neste diretório: .\docker-compose-python-psql.bat
+-> Vai criar um container no docker, com 2 subcontainers, um da API e outro da base de dados
+
+API-> /python/app/project-api.py
+DB-> /postgres
+
+2.Instalar postman para poder testar os requests:
+-> Importar o ficheiro testar_postman.json para o postman
