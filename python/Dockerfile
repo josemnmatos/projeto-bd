@@ -15,6 +15,11 @@ RUN pip install flask
 
 RUN pip install psycopg2-binary
 
+#?? talvez seja no postman
+
+RUN pip install pyjwt 
+
+
 #copy . /app
 
 #volume ["/app"]

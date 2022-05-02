@@ -22,7 +22,7 @@ def db_connection():
 ##########################################################
 
 
-@app.route("/")
+@app.route("/dbproj/")
 def landing_page():
     return """
 
@@ -39,7 +39,7 @@ def landing_page():
 ## USER: CRIAR E AUTENTICAR, NOTIFICACOES
 ##########################################################
 
-## Criar novo user
+## Registo de utilizadores
 ##-----------------------------------------------
 @app.route("/dbproj/user/", methods=["POST"])
 def cria_utilizador():
@@ -65,16 +65,17 @@ def cria_utilizador():
         return flask.jsonify(response)
 
     # parameterized queries, good for security and performance
-    
-    statement = "INSERT INTO utilizador (id, username, email, password) VALUES (DEFAULT, %s, %s,%s)"
+
+    statement = "INSERT INTO utilizador (id, username, email, password) VALUES (DEFAULT, %s, %s,%s) RETURNING id"
     values = (payload["username"], payload["email"], payload["password"])
 
     try:
         cur.execute(statement, values)
+        ret_id = cur.fetchone()[0]
 
         # commit the transaction
         conn.commit()
-        response = {"status": StatusCodes["success"], "results": f'Created new user {payload["username"]}'}
+        response = {"status": StatusCodes["success"], "results": f"{ret_id}"}
 
     except (Exception, psycopg2.DatabaseError) as error:
         logger.error(f"POST /user - error: {error}")
@@ -90,7 +91,7 @@ def cria_utilizador():
     return flask.jsonify(response)
 
 
-## Autenticar user
+## Autenticacao de utilizadores
 ##-----------------------------------------------
 @app.route("/dbproj/user/", methods=["PUT"])
 def autentica_user():
@@ -208,10 +209,10 @@ def cria_produto():
 
     try:
         cur.execute(statement, values)
-
+        ret_id = cur.fetchone()[0]
         # commit the transaction
         conn.commit()
-        response = {"status": StatusCodes["success"], "results": f'Inserted new product {payload["descricao"]}'}
+        response = {"status": StatusCodes["success"], "results": f"{ret_id}"}
 
     except (Exception, psycopg2.DatabaseError) as error:
         logger.error(f"POST /products - error: {error}")
@@ -227,7 +228,7 @@ def cria_produto():
     return flask.jsonify(response)
 
 
-## Atualizar produto existente
+## Atualizar detalhes produto
 ##-----------------------------------------------
 @app.route("/dbproj/product/<product_id>", methods=["PUT"])
 def atualiza_produto(product_id):
@@ -254,7 +255,7 @@ def atualiza_produto(product_id):
 
     try:
         res = cur.execute(statement, values)
-        response = {"status": StatusCodes["success"], "results": f"Updated: product with id: {product_id}"}
+        response = {"status": StatusCodes["success"]}
 
         # commit the transaction
         conn.commit()
@@ -272,213 +273,43 @@ def atualiza_produto(product_id):
 
     return flask.jsonify(response)
 
+
+## Consultar informacao generica de um produto
+##-----------------------------------------------
 
 ##########################################################
 ## COMPRA
 ##########################################################
 
+## Efetuar compra
+##-----------------------------------------------
 
 ##########################################################
 ## DEIXAR RATING/FEEDBACK
 ##########################################################
 
+## Ver ratings de um produto(para teste)
+##-----------------------------------------------
+
+## Deixar rating a produto comprado
+##-----------------------------------------------
+
 ##########################################################
 ## DEIXAR COMENTÁRIO/PERGUNTA
 ##########################################################
+
+## Criar thread/fazer pergunta
+##-----------------------------------------------
+
+## Responder a pergunta existente
+##-----------------------------------------------
 
 ##########################################################
 ## ESTATÍSTICAS
 ##########################################################
 
-"""
-
-##
-## Demo GET
-##
-## Obtain all departments in JSON format
-##
-## To use it, access:
-##
-## http://localhost:8080/departments/
-##
-
-
-@app.route("/departments/", methods=["GET"])
-def get_all_departments():
-    logger.info("GET /departments")
-
-    conn = db_connection()
-    cur = conn.cursor()
-
-    try:
-        cur.execute("SELECT ndep, nome, local FROM dep")
-        rows = cur.fetchall()
-
-        logger.debug("GET /departments - parse")
-        Results = []
-        for row in rows:
-            logger.debug(row)
-            content = {"ndep": int(row[0]), "nome": row[1], "localidade": row[2]}
-            Results.append(content)  # appending to the payload to be returned
-
-        response = {"status": StatusCodes["success"], "results": Results}
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f"GET /departments - error: {error}")
-        response = {"status": StatusCodes["internal_error"], "errors": str(error)}
-
-    finally:
-        if conn is not None:
-            conn.close()
-
-    return flask.jsonify(response)
-
-
-##
-## Demo GET
-##
-## Obtain department with ndep <ndep>
-##
-## To use it, access:
-##
-## http://localhost:8080/departments/10
-##
-
-
-@app.route("/dbproj/product/<product_id>/", methods=["GET"])
-def get_department(ndep):
-    logger.info("GET /dbproj/product/<product_id>")
-
-    logger.debug(f"ndep: {ndep}")
-
-    conn = db_connection()
-    cur = conn.cursor()
-
-    try:
-        cur.execute("SELECT ndep, nome, local FROM dep where ndep = %s", (ndep,))
-        rows = cur.fetchall()
-
-        row = rows[0]
-
-        logger.debug("GET /dbproj/product/<product_id> - parse")
-        logger.debug(row)
-        content = {"ndep": int(row[0]), "nome": row[1], "localidade": row[2]}
-
-        response = {"status": StatusCodes["success"], "results": content}
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f"GET /dbproj/product/<product_id> - error: {error}")
-        response = {"status": StatusCodes["internal_error"], "errors": str(error)}
-
-    finally:
-        if conn is not None:
-            conn.close()
-
-    return flask.jsonify(response)
-
-
-##
-## Demo POST
-##
-## Add a new department in a JSON payload
-##
-## To use it, you need to use postman or curl:
-##
-## curl -X POST http://localhost:8080/departments/ -H 'Content-Type: application/json' -d '{'localidade': 'Polo II', 'ndep': 69, 'nome': 'Seguranca'}'
-##
-
-
-@app.route("/departments/", methods=["POST"])
-def add_departments():
-    logger.info("POST /departments")
-    payload = flask.request.get_json()
-
-    conn = db_connection()
-    cur = conn.cursor()
-
-    logger.debug(f"POST /departments - payload: {payload}")
-
-    # do not forget to validate every argument, e.g.,:
-    if "ndep" not in payload:
-        response = {"status": StatusCodes["api_error"], "results": "ndep value not in payload"}
-        return flask.jsonify(response)
-
-    # parameterized queries, good for security and performance
-    statement = "INSERT INTO dep (ndep, nome, local) VALUES (%s, %s, %s)"
-    values = (payload["ndep"], payload["localidade"], payload["nome"])
-
-    try:
-        cur.execute(statement, values)
-
-        # commit the transaction
-        conn.commit()
-        response = {"status": StatusCodes["success"], "results": f'Inserted dep {payload["ndep"]}'}
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f"POST /departments - error: {error}")
-        response = {"status": StatusCodes["internal_error"], "errors": str(error)}
-
-        # an error occurred, rollback
-        conn.rollback()
-
-    finally:
-        if conn is not None:
-            conn.close()
-
-    return flask.jsonify(response)
-
-
-##
-## Demo PUT
-##
-## Update a department based on a JSON payload
-##
-## To use it, you need to use postman or curl:
-##
-## curl -X PUT http://localhost:8080/departments/ -H 'Content-Type: application/json' -d '{'ndep': 69, 'localidade': 'Porto'}'
-##
-
-
-@app.route("/dbproj/product/<product_id>", methods=["PUT"])
-def update_departments(ndep):
-    logger.info("PUT /dbproj/product/<product_id>")
-    payload = flask.request.get_json()
-
-    conn = db_connection()
-    cur = conn.cursor()
-
-    logger.debug(f"PUT /dbproj/product/<product_id> - payload: {payload}")
-
-    # do not forget to validate every argument, e.g.,:
-    if "localidade" not in payload:
-        response = {"status": StatusCodes["api_error"], "results": "localidade is required to update"}
-        return flask.jsonify(response)
-
-    # parameterized queries, good for security and performance
-    statement = "UPDATE dep SET local = %s WHERE ndep = %s"
-    values = (payload["localidade"], ndep)
-
-    try:
-        res = cur.execute(statement, values)
-        response = {"status": StatusCodes["success"], "results": f"Updated: {cur.rowcount}"}
-
-        # commit the transaction
-        conn.commit()
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(error)
-        response = {"status": StatusCodes["internal_error"], "errors": str(error)}
-
-        # an error occurred, rollback
-        conn.rollback()
-
-    finally:
-        if conn is not None:
-            conn.close()
-
-    return flask.jsonify(response)
-
-"""
+## Obter estatísticas (por mes) dos ultimos 12 meses
+##-----------------------------------------------
 
 
 ##########################################################

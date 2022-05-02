@@ -9,6 +9,7 @@
 CREATE TABLE produto (
 	id SERIAL,
 	descricao				 VARCHAR(512),
+	tipo				VARCHAR(512),				
 	preco				 FLOAT(8) NOT NULL,
 	stock				 BIGINT NOT NULL,
 	vendedor_utilizador_id INTEGER,
