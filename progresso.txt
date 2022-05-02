@@ -1,0 +1,2 @@
+1/5 - base do projeto, api, bd e criar novo produto
+falta : id do vendedor, verificar se é vendedor registado, ao atualizar verificar se id do vendedor é igual ao do user atual e guardar versao anterior
