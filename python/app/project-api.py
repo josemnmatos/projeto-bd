@@ -1,6 +1,9 @@
 import flask
 import logging, psycopg2, time
+import jwt
+from datetime import date
 
+jwt_secret = "bdprojeto"
 
 app = flask.Flask(__name__)
 
@@ -15,6 +18,25 @@ def db_connection():
     db = psycopg2.connect(user="dev", password="password", host="db", port="5432", database="dbprojeto")
 
     return db
+
+
+##########################################################
+## AUX FUNCTIONS
+##########################################################
+
+
+def get_user_id_permission(token):
+    conn = db_connection()
+    cur = conn.cursor()
+    statement = "SELECT id in utilizador WHERE token=%s RETURNING id"
+    values = (token,)
+
+    cur.execute(statement, values)
+    ret_id = cur.fetchone()[0]
+    # commit the transaction
+
+    conn.commit()
+    return ret_id
 
 
 ##########################################################
@@ -64,14 +86,63 @@ def cria_utilizador():
         response = {"status": StatusCodes["api_error"], "results": "password value not in payload"}
         return flask.jsonify(response)
 
+    if "role" not in payload:
+        response = {"status": StatusCodes["api_error"], "results": "role value not in payload"}
+        return flask.jsonify(response)
+
+    if payload["role"] not in ["comprador", "vendedor", "administrador"]:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "role value not valid: comprador,vendedor or administrador",
+        }
+        return flask.jsonify(response)
+
     # parameterized queries, good for security and performance
 
-    statement = "INSERT INTO utilizador (id, username, email, password) VALUES (DEFAULT, %s, %s,%s) RETURNING id"
-    values = (payload["username"], payload["email"], payload["password"])
+    statement1 = "INSERT INTO utilizador (id, username, email, password) VALUES (DEFAULT, %s, %s,%s) RETURNING id"
+    values1 = (payload["username"], payload["email"], payload["password"])
 
     try:
-        cur.execute(statement, values)
+        cur.execute(statement1, values1)
         ret_id = cur.fetchone()[0]
+
+        # insert nas tabelas relativas ao cargo
+        if payload["role"] == "comprador":
+            if "nif" not in payload:
+                response = {"status": StatusCodes["api_error"], "results": "nif value not in payload"}
+                return flask.jsonify(response)
+
+            if "morada" not in payload:
+                response = {"status": StatusCodes["api_error"], "results": "morada value not in payload"}
+                return flask.jsonify(response)
+
+            statement2 = "INSERT INTO comprador (utilizador_id, morada, nif) VALUES (%s, %s,%s)"
+            values2 = (ret_id, payload["morada"], payload["nif"])
+
+        elif payload["role"] == "vendedor":
+            if "nif" not in payload:
+                response = {"status": StatusCodes["api_error"], "results": "nif value not in payload"}
+                return flask.jsonify(response)
+
+            if "morada_envio" not in payload:
+                response = {"status": StatusCodes["api_error"], "results": "morada_envio value not in payload"}
+                return flask.jsonify(response)
+
+            if "endereco_pagamento" not in payload:
+                response = {"status": StatusCodes["api_error"], "results": "endereco_pagamento value not in payload"}
+                return flask.jsonify(response)
+
+            statement2 = (
+                "INSERT INTO vendedor (utilizador_id,nif,morada_envio,endereco_pagamento) VALUES (%s, %s,%s,%s)"
+            )
+            values2 = (ret_id, payload["nif"], payload["morada_envio"], payload["endereco_pagamento"])
+
+        elif payload["role"] == "administrador":
+            statement2 = "INSERT INTO administrador (utilizador_id) VALUES (%s) RETURNING id"
+            values2 = (ret_id,)
+
+        # insert into tabelas de cargo
+        cur.execute(statement2, values2)
 
         # commit the transaction
         conn.commit()
@@ -94,7 +165,7 @@ def cria_utilizador():
 ## Autenticacao de utilizadores
 ##-----------------------------------------------
 @app.route("/dbproj/user/", methods=["PUT"])
-def autentica_user():
+def autenticar_user():
     logger.info("PUT /dbproj/user/")
     payload = flask.request.get_json()
 
@@ -119,11 +190,17 @@ def autentica_user():
     req_password = payload["password"]
 
     try:
-        res = cur.execute(statement, (req_username,))  # postgres apenas aceita tuplo
+        cur.execute(statement, (req_username,))  # postgres apenas aceita tuplo
         if cur.fetchall()[0][0] == str(req_password):  # passwords match
-            response = {"status": StatusCodes["success"], "results": f"User logged in: {req_username}"}
+            token = jwt.encode(payload=payload, key=jwt_secret)
+            # adicionar token ao user
+            statement = "UPDATE utilizador SET active_token=%s WHERE username = %s"
+            args = (token, req_username)
+            cur.execute(statement, args)
+            response = {"status": StatusCodes["success"], "results": f"User logged in: {req_username}", "token": token}
         else:
             response = {"status": StatusCodes["internal_error"], "results": f"Passwords do not match."}
+
         # commit the transaction
         conn.commit()
 
@@ -148,14 +225,14 @@ def autentica_user():
 ## Obter todos os produtos(testar)
 ##-----------------------------------------------
 @app.route("/dbproj/product/", methods=["GET"])
-def get_all_departments():
+def get_all_products():
     logger.info("GET /dbproj/product")
 
     conn = db_connection()
     cur = conn.cursor()
 
     try:
-        cur.execute("SELECT id, descricao, preco,stock FROM produto")
+        cur.execute("SELECT id, descricao, preco,stock FROM produto ORDER BY id")
         rows = cur.fetchall()
 
         logger.debug("GET /dbproj/product - parse")
@@ -204,7 +281,7 @@ def cria_produto():
         return flask.jsonify(response)
 
     # parameterized queries, good for security and performance
-    statement = "INSERT INTO produto (id, descricao, preco, stock) VALUES (DEFAULT, %s, %s,%s)"
+    statement = "INSERT INTO produto (id, descricao, preco, stock) VALUES (DEFAULT, %s, %s,%s) RETURNING id"
     values = (payload["descricao"], float(payload["preco"]), int(payload["stock"]))
 
     try:
@@ -215,7 +292,7 @@ def cria_produto():
         response = {"status": StatusCodes["success"], "results": f"{ret_id}"}
 
     except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f"POST /products - error: {error}")
+        logger.error(f"POST /dbproj/product - error: {error}")
         response = {"status": StatusCodes["internal_error"], "errors": str(error)}
 
         # an error occurred, rollback
@@ -274,41 +351,102 @@ def atualiza_produto(product_id):
     return flask.jsonify(response)
 
 
-## Consultar informacao generica de um produto
+## Consultar informacao generica de um produto -GET
 ##-----------------------------------------------
 
 ##########################################################
 ## COMPRA
 ##########################################################
 
-## Efetuar compra
+## Efetuar compra-PUT
 ##-----------------------------------------------
+@app.route("/dbproj/order/", methods=["POST"])
+def efetuar_compra(product_id):
+    logger.info("POST /dbproj/order")
+    payload = flask.request.get_json()
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    logger.debug(f"POST /dbproj/order - payload: {payload}")
+
+    # do not forget to validate every argument, e.g.,:
+    if "cart" not in payload:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "cart is required to make an order",
+        }
+        return flask.jsonify(response)
+
+    if "token" not in payload:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "token is required to make an order",
+        }
+        return flask.jsonify(response)
+
+    # verify cart input
+    for order_item in payload["cart"]:
+        product_id = order_item[0]
+        order_quantity = order_item[1]
+        if isinstance(product_id, int) == 0 or isinstance(order_quantity, int) == 0:
+            response = {
+                "status": StatusCodes["api_error"],
+                "results": "cart format not valid",
+            }
+        return flask.jsonify(response)
+
+    # parameterized queries, good for security and performance
+    statement = "INSERT INTO encomenda (id, data, preco, stock) VALUES (DEFAULT, %s, %s,%s) RETURNING id"
+    values = (payload["descricao"], payload["preco"], payload["stock"], product_id)
+
+    try:
+        res = cur.execute(statement, values)
+        response = {"status": StatusCodes["success"]}
+
+        # commit the transaction
+        conn.commit()
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(error)
+        response = {"status": StatusCodes["internal_error"], "errors": str(error)}
+
+        # an error occurred, rollback
+        conn.rollback()
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return flask.jsonify(response)
+
 
 ##########################################################
 ## DEIXAR RATING/FEEDBACK
 ##########################################################
 
-## Ver ratings de um produto(para teste)
+## Ver ratings de um produto(para teste)-GET
 ##-----------------------------------------------
 
-## Deixar rating a produto comprado
+## Deixar rating a produto comprado-PUT
 ##-----------------------------------------------
+
 
 ##########################################################
 ## DEIXAR COMENTÁRIO/PERGUNTA
 ##########################################################
 
-## Criar thread/fazer pergunta
+## Criar thread/fazer pergunta-POST
 ##-----------------------------------------------
 
-## Responder a pergunta existente
+## Responder a pergunta existente-POST
 ##-----------------------------------------------
 
 ##########################################################
 ## ESTATÍSTICAS
 ##########################################################
 
-## Obter estatísticas (por mes) dos ultimos 12 meses
+## Obter estatísticas (por mes) dos ultimos 12 meses-GET
 ##-----------------------------------------------
 
 

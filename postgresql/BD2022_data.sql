@@ -39,9 +39,10 @@ CREATE TABLE utilizador (
 	username		 VARCHAR(512) UNIQUE NOT NULL,
 	email		 VARCHAR(512) UNIQUE NOT NULL,
 	password		 VARCHAR(512) NOT NULL,
-	login_token_token VARCHAR(512) /*NOT NULL*/,
+	active_token VARCHAR(512) UNIQUE,
 	PRIMARY KEY(id)
 );
+
 
 CREATE TABLE administrador (
 	utilizador_id INTEGER,
@@ -49,17 +50,17 @@ CREATE TABLE administrador (
 );
 
 CREATE TABLE vendedor (
-	nif			 BIGINT,
-	morada_envio		 VARCHAR(512),
-	endereco_pagamento	 VARCHAR(512),
 	utilizador_id INTEGER,
+	nif			 BIGINT NOT NULL,
+	morada_envio		 VARCHAR(512) NOT NULL,
+	endereco_pagamento	 VARCHAR(512) NOT NULL,
 	PRIMARY KEY(utilizador_id)
 );
 
 CREATE TABLE comprador (
-	morada			 VARCHAR(512) NOT NULL,
-	nif			 BIGINT,
 	utilizador_id INTEGER,
+	morada			 VARCHAR(512) NOT NULL,
+	nif			 BIGINT NOT NULL,
 	PRIMARY KEY(utilizador_id)
 );
 
@@ -88,9 +89,8 @@ CREATE TABLE resposta (
 
 CREATE TABLE encomenda (
 	id					 SERIAL,
-	data				 DATE NOT NULL,
-	preco_total				 FLOAT(8) NOT NULL,
-	notificacao_encomenda_notificacao_id BIGINT NOT NULL,
+	data				 TIMESTAMP NOT NULL,
+	notificacao_encomenda_notificacao_id BIGINT,
 	comprador_utilizador_id	 INTEGER NOT NULL,
 	PRIMARY KEY(id)
 );
