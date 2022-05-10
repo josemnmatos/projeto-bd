@@ -25,23 +25,7 @@ def db_connection():
 ##########################################################
 
 
-def create_general_admin():
-    conn = db_connection()
-    cur = conn.cursor()
-    # insere admin principal se este não existir
-    username = "admin"
-    password = "password"
-    email = "admin@gmail.com"
-    statement = "INSERT INTO utilizador(id,username,email,password) VALUES(DEFAULT,%s,%s,%s) ON CONFLICT DO NOTHING"
-    values = (username, email, password)
-    cur.execute(statement, values)
 
-    cur.execute("SELECT id from utilizador WHERE username=%s", (username,))
-    admin_id = cur.fetchone()[0]
-
-    statement = "INSERT INTO administrador(utilizador_id) VALUES(%s) ON CONFLICT DO NOTHING"
-    values = (admin_id,)
-    cur.execute(statement, values)
 
 
 def get_user_id(token):
@@ -358,6 +342,7 @@ def cria_produto():
     values = (payload["descricao"], float(payload["preco"]), int(payload["stock"]))
 
     try:
+        # verifica se user atual é vendedor e retorna id para adicionar ao produto
         cur.execute(statement, values)
         ret_id = cur.fetchone()[0]
         # commit the transaction
@@ -539,9 +524,6 @@ if __name__ == "__main__":
     formatter = logging.Formatter("%(asctime)s [%(levelname)s]:  %(message)s", "%H:%M:%S")
     ch.setFormatter(formatter)
     logger.addHandler(ch)
-
-    # create first admin
-    create_general_admin()
 
     time.sleep(1)  # just to let the DB start before this print :-)
 
