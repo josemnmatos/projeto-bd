@@ -25,18 +25,65 @@ def db_connection():
 ##########################################################
 
 
-def get_user_id_permission(token):
+def create_general_admin():
     conn = db_connection()
     cur = conn.cursor()
-    statement = "SELECT id in utilizador WHERE token=%s RETURNING id"
-    values = (token,)
-
+    # insere admin principal se este não existir
+    username = "admin"
+    password = "password"
+    email = "admin@gmail.com"
+    statement = "INSERT INTO utilizador(id,username,email,password) VALUES(DEFAULT,%s,%s,%s) ON CONFLICT DO NOTHING"
+    values = (username, email, password)
     cur.execute(statement, values)
-    ret_id = cur.fetchone()[0]
-    # commit the transaction
 
+    cur.execute("SELECT id from utilizador WHERE username=%s", (username,))
+    admin_id = cur.fetchone()[0]
+
+    statement = "INSERT INTO administrador(utilizador_id) VALUES(%s) ON CONFLICT DO NOTHING"
+    values = (admin_id,)
+    cur.execute(statement, values)
+
+
+def get_user_id(token):
+    conn = db_connection()
+    cur = conn.cursor()
+    statement = "SELECT id from utilizador WHERE active_token=%s"
+    values = (token,)
+    cur.execute(statement, values)
+    res = cur.fetchone()
+    ret_id = None
+    if res is not None:
+        ret_id = res[0]
+
+    # commit the transaction
     conn.commit()
     return ret_id
+
+
+def get_user_role(id):
+    conn = db_connection()
+    cur = conn.cursor()
+
+    statement = "SELECT * from vendedor WHERE utilizador_id=%s"
+
+    # verifica se é vendedor
+    values = (id,)
+    cur.execute(statement, values)
+    if cur.fetchone() != []:
+        conn.commit()
+        return "vendedor"
+
+    statement = "SELECT * from administrador WHERE utilizador_id=%s"
+    # verifica se é admin
+    values = (id,)
+    cur.execute(statement, values)
+    if cur.fetchone() != []:
+        conn.commit()
+        return "administrador"
+
+    # se não é nenhum outro é comprador
+    conn.commit()
+    return "comprador"
 
 
 ##########################################################
@@ -98,6 +145,28 @@ def cria_utilizador():
         return flask.jsonify(response)
 
     # parameterized queries, good for security and performance
+
+    if payload["role"] in ["vendedor", "administrador"]:
+        # necessidade de verificar token de administrador
+        if "token" not in payload:
+            response = {
+                "status": StatusCodes["api_error"],
+                "results": "token value needed when creating vendedor or administrador",
+            }
+            return flask.jsonify(response)
+
+        user_id = get_user_id(payload["token"])
+
+        if user_id == None:
+            response = {"status": StatusCodes["api_error"], "results": "invalid token value"}
+            return flask.jsonify(response)
+
+        if get_user_role(user_id) != "administrador":
+            response = {
+                "status": StatusCodes["api_error"],
+                "results": "user doesn't have permission to register new vendedor or administrador",
+            }
+            return flask.jsonify(response)
 
     statement1 = "INSERT INTO utilizador (id, username, email, password) VALUES (DEFAULT, %s, %s,%s) RETURNING id"
     values1 = (payload["username"], payload["email"], payload["password"])
@@ -278,6 +347,10 @@ def cria_produto():
 
     if "stock" not in payload:
         response = {"status": StatusCodes["api_error"], "results": "stock value not in payload"}
+        return flask.jsonify(response)
+
+    if "token" not in payload:
+        response = {"status": StatusCodes["api_error"], "results": "token value not in payload"}
         return flask.jsonify(response)
 
     # parameterized queries, good for security and performance
@@ -466,6 +539,9 @@ if __name__ == "__main__":
     formatter = logging.Formatter("%(asctime)s [%(levelname)s]:  %(message)s", "%H:%M:%S")
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+
+    # create first admin
+    create_general_admin()
 
     time.sleep(1)  # just to let the DB start before this print :-)
 

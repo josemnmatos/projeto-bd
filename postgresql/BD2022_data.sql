@@ -12,7 +12,7 @@ CREATE TABLE produto (
 	tipo				VARCHAR(512),				
 	preco				 FLOAT(8) NOT NULL,
 	stock				 BIGINT NOT NULL,
-	vendedor_utilizador_id INTEGER,
+	vendedor_utilizador_id INTEGER NOT NULL,
 	PRIMARY KEY(id)
 );
 
@@ -48,6 +48,11 @@ CREATE TABLE administrador (
 	utilizador_id INTEGER,
 	PRIMARY KEY(utilizador_id)
 );
+
+--first admin
+INSERT INTO utilizador (username,email,password) VALUES ('admin','admin@gmail.com','password');
+INSERT INTO administrador (utilizador_id) SELECT id from utilizador WHERE username='admin';
+
 
 CREATE TABLE vendedor (
 	utilizador_id INTEGER,
