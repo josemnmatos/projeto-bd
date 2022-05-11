@@ -24,49 +24,24 @@ def db_connection():
 ## AUX FUNCTIONS
 ##########################################################
 
-
-
-
-
-def get_user_id(token):
+# funcao para ajudar na construcao do payload da jwt
+def get_user_permission(id):
     conn = db_connection()
     cur = conn.cursor()
-    statement = "SELECT id from utilizador WHERE active_token=%s"
-    values = (token,)
-    cur.execute(statement, values)
-    res = cur.fetchone()
-    ret_id = None
-    if res is not None:
-        ret_id = res[0]
-
-    # commit the transaction
-    conn.commit()
-    return ret_id
-
-
-def get_user_role(id):
-    conn = db_connection()
-    cur = conn.cursor()
-
-    statement = "SELECT * from vendedor WHERE utilizador_id=%s"
-
-    # verifica se é vendedor
     values = (id,)
-    cur.execute(statement, values)
-    if cur.fetchone() != []:
-        conn.commit()
+    # vendedor
+    query1 = "SELECT * from vendedor WHERE utilizador_id=%s"
+    cur.execute(query1, values)
+    result = cur.fetchone()
+    if result is not None:
         return "vendedor"
-
-    statement = "SELECT * from administrador WHERE utilizador_id=%s"
-    # verifica se é admin
-    values = (id,)
-    cur.execute(statement, values)
-    if cur.fetchone() != []:
-        conn.commit()
+    # admin
+    query2 = "SELECT * from administrador WHERE utilizador_id=%s"
+    cur.execute(query2, values)
+    result = cur.fetchone()
+    if result is not None:
         return "administrador"
-
-    # se não é nenhum outro é comprador
-    conn.commit()
+    # comprador
     return "comprador"
 
 
@@ -130,6 +105,7 @@ def cria_utilizador():
 
     # parameterized queries, good for security and performance
 
+    # verificar permissao presente na token
     if payload["role"] in ["vendedor", "administrador"]:
         # necessidade de verificar token de administrador
         if "token" not in payload:
@@ -139,16 +115,12 @@ def cria_utilizador():
             }
             return flask.jsonify(response)
 
-        user_id = get_user_id(payload["token"])
+        auth_payload = jwt.decode(payload["token"], jwt_secret, algorithms=["HS256"])
 
-        if user_id == None:
-            response = {"status": StatusCodes["api_error"], "results": "invalid token value"}
-            return flask.jsonify(response)
-
-        if get_user_role(user_id) != "administrador":
+        if auth_payload["auth_role"] != "administrador":
             response = {
                 "status": StatusCodes["api_error"],
-                "results": "user doesn't have permission to register new vendedor or administrador",
+                "results": "admin permission needed to create administrador or vendedor",
             }
             return flask.jsonify(response)
 
@@ -238,14 +210,25 @@ def autenticar_user():
 
     # parameterized queries, good for security and performance
     # atualiza descricao
-    statement = "SELECT password from utilizador WHERE username=%s"
+    statement = "SELECT password,id from utilizador WHERE username=%s"
     req_username = payload["username"]
     req_password = payload["password"]
 
     try:
         cur.execute(statement, (req_username,))  # postgres apenas aceita tuplo
-        if cur.fetchall()[0][0] == str(req_password):  # passwords match
-            token = jwt.encode(payload=payload, key=jwt_secret)
+        res = cur.fetchall()[0]
+        if res[0] == str(req_password):  # passwords match
+            login_user_id = res[1]
+            # codifica token própria do user para o login atual
+            token = jwt.encode(
+                {
+                    "auth_id": login_user_id,
+                    "auth_user": payload["username"],
+                    "auth_role": get_user_permission(login_user_id),
+                },
+                jwt_secret,
+                algorithm="HS256",
+            )
             # adicionar token ao user
             statement = "UPDATE utilizador SET active_token=%s WHERE username = %s"
             args = (token, req_username)
@@ -337,12 +320,23 @@ def cria_produto():
         response = {"status": StatusCodes["api_error"], "results": "token value not in payload"}
         return flask.jsonify(response)
 
+    # verifica se user é vendedor
+
+    auth_token = jwt.decode(payload["token"], jwt_secret, algorithms="HS256")
+
+    if auth_token["auth_role"] != "vendedor":
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "must have vendedor permission to execute this request",
+        }
+        return flask.jsonify(response)
+
     # parameterized queries, good for security and performance
-    statement = "INSERT INTO produto (id, descricao, preco, stock) VALUES (DEFAULT, %s, %s,%s) RETURNING id"
-    values = (payload["descricao"], float(payload["preco"]), int(payload["stock"]))
+    statement = "INSERT INTO produto (id, descricao, preco, stock, vendedor_utilizador_id) VALUES (DEFAULT, %s, %s,%s,%s) RETURNING id"
+    values = (payload["descricao"], float(payload["preco"]), int(payload["stock"]), auth_token["auth_id"])
 
     try:
-        # verifica se user atual é vendedor e retorna id para adicionar ao produto
+        # executa e retorna id para adicionar ao produto
         cur.execute(statement, values)
         ret_id = cur.fetchone()[0]
         # commit the transaction
@@ -383,15 +377,37 @@ def atualiza_produto(product_id):
         }
         return flask.jsonify(response)
 
-        # parameterized queries, good for security and performance
-        # atualiza descricao
-    statement = "UPDATE produto SET descricao = %s, preco = %s, stock = %s WHERE id = %s"
+    if "token" not in payload:
+        response = {"status": StatusCodes["api_error"], "results": "token value not in payload"}
+        return flask.jsonify(response)
+
+    # para verificar se user ativo é o vendedor do produto a atualizar
+    auth_payload = jwt.decode(payload["token"], jwt_secret, algorithms="HS256")
+
+    # parameterized queries, good for security and performance
+    # atualiza descricao
+    statement = (
+        "UPDATE produto SET descricao = %s, preco = %s, stock = %s WHERE id = %s RETURNING vendedor_utilizador_id"
+    )
     values = (payload["descricao"], payload["preco"], payload["stock"], product_id)
 
     try:
-        res = cur.execute(statement, values)
-        response = {"status": StatusCodes["success"]}
+        cur.execute(statement, values)
 
+        # vendedor não corresponde ao user atual
+        seller_id = cur.fetchone()
+
+        if seller_id is None:
+            response = {"status": StatusCodes["api_error"], "results": "product with chosen id does not exist"}
+            conn.rollback()
+            return flask.jsonify(response)
+
+        if seller_id[0] != auth_payload["auth_id"]:
+            response = {"status": StatusCodes["api_error"], "results": "current user is not seller of product chosen"}
+            conn.rollback()
+            return flask.jsonify(response)
+
+        response = {"status": StatusCodes["success"]}
         # commit the transaction
         conn.commit()
 
