@@ -1,7 +1,7 @@
 import flask
 import logging, psycopg2, time
 import jwt
-from datetime import date
+from datetime import date, datetime
 
 jwt_secret = "bdprojeto"
 
@@ -435,7 +435,7 @@ def atualiza_produto(product_id):
 ## Efetuar compra-PUT
 ##-----------------------------------------------
 @app.route("/dbproj/order/", methods=["POST"])
-def efetuar_compra(product_id):
+def efetuar_compra():
     logger.info("POST /dbproj/order")
     payload = flask.request.get_json()
 
@@ -459,24 +459,53 @@ def efetuar_compra(product_id):
         }
         return flask.jsonify(response)
 
+    # check if current user is a buyer
+    auth_payload = jwt.decode(payload["token"], jwt_secret, algorithms="HS256")
+    if auth_payload["auth_role"] != "comprador":
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "role must be comprador to make an order",
+        }
+        return flask.jsonify(response)
+
     # verify cart input
     for order_item in payload["cart"]:
         product_id = order_item[0]
         order_quantity = order_item[1]
+        if order_quantity <= 0 or product_id <= 0:
+            response = {
+                "status": StatusCodes["api_error"],
+                "results": "values not valid",
+            }
+
         if isinstance(product_id, int) == 0 or isinstance(order_quantity, int) == 0:
             response = {
                 "status": StatusCodes["api_error"],
                 "results": "cart format not valid",
             }
-        return flask.jsonify(response)
+            return flask.jsonify(response)
 
     # parameterized queries, good for security and performance
-    statement = "INSERT INTO encomenda (id, data, preco, stock) VALUES (DEFAULT, %s, %s,%s) RETURNING id"
-    values = (payload["descricao"], payload["preco"], payload["stock"], product_id)
+    statement = "INSERT INTO encomenda (id, data, comprador_utilizador_id) VALUES (DEFAULT, %s, %s) RETURNING id"
+    values = (datetime.utcnow(), auth_payload["auth_id"])
 
     try:
-        res = cur.execute(statement, values)
-        response = {"status": StatusCodes["success"]}
+        cur.execute(statement, values)
+        id_encomenda = cur.fetchone()[0]
+        # insert every order item
+        for order_item in payload["cart"]:
+            item_product_id = order_item[0]
+            item_product_quantity = order_item[1]
+            # check stock and insert into sale item table
+            statement = "INSERT INTO item_encomenda(quantidade,encomenda_id,produto_id) VALUES(%s,%s,%s)"
+            values = (item_product_quantity, id_encomenda, item_product_id)
+            cur.execute(statement, values)
+            # update stock
+            statement = " UPDATE produto SET stock = stock - %s WHERE id=%s"
+            values = (item_product_quantity, item_product_id)
+            cur.execute(statement, values)
+
+        response = {"status": StatusCodes["success"], "results": f"{id_encomenda}"}
 
         # commit the transaction
         conn.commit()

@@ -11,3 +11,9 @@ DB-> /postgres
 
 2.Instalar postman para poder testar os requests:
 -> Importar o ficheiro testar_postman.json para o postman
+
+
+VALORES EXISTENTES AO INICIAR:
+1.Users:
+username:admin
+password:password

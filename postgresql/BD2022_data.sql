@@ -10,8 +10,8 @@ CREATE TABLE produto (
 	id SERIAL,
 	descricao				 VARCHAR(512),
 	tipo				VARCHAR(512),				
-	preco				 FLOAT(8) NOT NULL,
-	stock				 BIGINT NOT NULL,
+	preco				 FLOAT(8) NOT NULL CHECK(stock>=0),
+	stock				 BIGINT NOT NULL CHECK(stock>=0),
 	vendedor_utilizador_id INTEGER NOT NULL,
 	PRIMARY KEY(id)
 );
