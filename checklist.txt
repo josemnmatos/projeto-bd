@@ -1,0 +1,42 @@
+Todos os requests até agora para testar estão no projeto-bd.postman_collection.json
+->Instalar postman
+->Importar collection e selecionar o ficheiro
+
+************************************
+Endpoints:
+
+1. Registo - FEITO
+
+2. Autenticação (Login) - FEITO
+->retorna token jwt do utilizador logado com payload com id do user, username e permissoes dentro da app
+
+3. Criar novo produto - FEITO, FALTA:
+->tudo o que tenha a ver com as tabelas específicas ao tipo de produto, por exemplo tv,smartphone,etc..., ou seja as características específicas de cada produto
+->pode ser melhorado ainda assim
+
+4. Atualizar detalhes produto - FEITO,FALTA:
+->Arranjar maneira de guardar versões antigas do produto e características antigas do mesmo
+
+5. Efetuar compra - FEITO(no entanto é preciso ver melhor a nível do isolamento das transações?)
+
+6. Deixar rating/feedback - POR FAZER
+
+7. Deixar comentário/pergunta - POR FAZER
+
+8.Consultar	informações	genéricas de	um	produto - POR FAZER
+->com UMA query
+
+9.Obter	estatísticas	(por mês) nos últimos 12	meses. - POR FAZER
+->com UMA query
+************************************
+
+!!!!!!!!!!!!!!!!!!!!! - FALTA FAZER
+Não	esquecer:	deverá	existir	um	sistema automatizado de	notificações,	implementado	através	de	triggers,	
+conforme	 descrito	 no	 enquadramento	 do	 projeto. Deve	implementar	 o(s)	 endpoint(s)	 necessários	 para	
+consultar	estas	notificações.
+"Deverá	existir	também	um	sistema	de	notificações	automatizado.	Um	vendedor	deve	receber	notificações	
+quando	um	dos	seus	produtos	é	adquirido	(e	os	respetivos	detalhes	da	encomenda)	e	quando	alguém	faz	
+alguma	pergunta	num	dos	seus	produtos.	Um	comprador	deve	receber	todas	as	notificações	expectáveis,	
+tais	 como	 detalhes	 de	 uma	 encomenda	 efetuada.	 Qualquer	 utilizador	 deve	 receber	 notificações	
+relativamente	a	respostas	a	perguntas	feitas	por	ele	em	algum	produto.	O	sistema	de	notificações	deverá	
+ser	implementado	com	recurso	a	triggers."
