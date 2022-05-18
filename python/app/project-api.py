@@ -470,13 +470,15 @@ def efetuar_compra():
 
     # verify cart input
     for order_item in payload["cart"]:
-        product_id = order_item[0]
-        order_quantity = order_item[1]
+        product_id = int(order_item[0])
+        order_quantity = int(order_item[1])
+
         if order_quantity <= 0 or product_id <= 0:
             response = {
                 "status": StatusCodes["api_error"],
                 "results": "values not valid",
             }
+            return flask.jsonify(response)
 
         if isinstance(product_id, int) == 0 or isinstance(order_quantity, int) == 0:
             response = {
@@ -531,8 +533,95 @@ def efetuar_compra():
 ## Ver ratings de um produto(para teste)-GET
 ##-----------------------------------------------
 
-## Deixar rating a produto comprado-PUT
+## Deixar rating a produto comprado-POST
 ##-----------------------------------------------
+@app.route("/dbproj/rating/<product_id>", methods=["POST"])
+def deixar_rating(product_id):
+    logger.info("POST /dbproj/rating/<product_id>")
+    payload = flask.request.get_json()
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    logger.debug(f"POST /dbproj/rating/<product_id> - payload: {payload}")
+
+    # do not forget to validate every argument, e.g.,:
+    if "rating" not in payload:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "rating value is required to leave a review",
+        }
+        return flask.jsonify(response)
+
+    if int(payload["rating"]) > 5 or int(payload["rating"]) < 0:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "rating value must be an integer between 1 and 5",
+        }
+        return flask.jsonify(response)
+
+    if "comment" not in payload:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "comment is required to leave a review",
+        }
+        return flask.jsonify(response)
+
+    if "token" not in payload:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "token is required to make an order",
+        }
+        return flask.jsonify(response)
+
+    auth_payload = jwt.decode(payload["token"], jwt_secret, algorithms="HS256")
+    # check if current user is a buyer and has bought the product
+    if auth_payload["auth_role"] != "comprador":
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "role must be comprador to leave a review",
+        }
+        return flask.jsonify(response)
+    # check if has bought the product
+
+    statement = "WITH user_orders AS(SELECT id from encomenda WHERE comprador_utilizador_id=%s) SELECT * from item_encomenda WHERE produto_id=%s and encomenda_id IN(SELECT id from user_orders)"
+    values = (auth_payload["auth_id"], product_id)
+    cur.execute(statement, values)
+    # if it returns anything continue
+    if (cur.fetchall()) == []:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "user must have bought the item before to review it",
+        }
+        return flask.jsonify(response)
+
+    # store the rating
+    # parameterized queries, good for security and performance
+    statement = (
+        "INSERT INTO rating (classificacao,comentario, comprador_utilizador_id, produto_id) VALUES (%s,%s, %s, %s)"
+    )
+    values = (payload["rating"], payload["comment"], auth_payload["auth_id"], product_id)
+
+    try:
+        cur.execute(statement, values)
+
+        response = {"status": StatusCodes["success"], "results": "rating registered"}
+
+        # commit the transaction
+        conn.commit()
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(error)
+        response = {"status": StatusCodes["internal_error"], "errors": str(error)}
+
+        # an error occurred, rollback
+        conn.rollback()
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return flask.jsonify(response)
 
 
 ##########################################################
@@ -541,9 +630,166 @@ def efetuar_compra():
 
 ## Criar thread/fazer pergunta-POST
 ##-----------------------------------------------
+@app.route("/dbproj/questions/<product_id>", methods=["POST"])
+def criar_thread(product_id):
+    logger.info("POST /dbproj/questions/<product_id>")
+    payload = flask.request.get_json()
 
+    conn = db_connection()
+    cur = conn.cursor()
+
+    logger.debug(f"POST /dbproj/questions/<product_id> - payload: {payload}")
+
+    # check if product exists
+    statement = "SELECT * FROM produto WHERE id=%s"
+    values = (product_id,)
+    cur.execute(statement, values)
+    if cur.fetchall() == []:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "product with chosen id does not exist",
+        }
+        return flask.jsonify(response)
+
+    # do not forget to validate every argument, e.g.,:
+    if "question" not in payload:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "rating value is required to leave a review",
+        }
+        return flask.jsonify(response)
+
+    if "token" not in payload:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "token is required to make an order",
+        }
+        return flask.jsonify(response)
+
+    auth_payload = jwt.decode(payload["token"], jwt_secret, algorithms="HS256")
+    # check if current user is a buyer
+    if auth_payload["auth_role"] != "comprador":
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "role must be comprador to create a thread",
+        }
+        return flask.jsonify(response)
+
+    # create thread
+
+    statement = "INSERT INTO thread(id,username,pergunta,produto_id) VALUES(DEFAULT,%s,%s,%s) RETURNING id"
+    values = (auth_payload["auth_user"], payload["question"], product_id)
+
+    try:
+        cur.execute(statement, values)
+        question_id = cur.fetchone()[0]
+        response = {"status": StatusCodes["success"], "results": f"{question_id}"}
+
+        # commit the transaction
+        conn.commit()
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(error)
+        response = {"status": StatusCodes["internal_error"], "errors": str(error)}
+
+        # an error occurred, rollback
+        conn.rollback()
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return flask.jsonify(response)
+
+#POR TESTAR!!!!
 ## Responder a pergunta existente-POST
 ##-----------------------------------------------
+@app.route("/dbproj/questions/<product_id>/<parent_question_id>", methods=["POST"])
+def criar_thread(product_id, parent_question_id):
+    logger.info("POST /dbproj/questions/<product_id>/<parent_question_id>")
+    payload = flask.request.get_json()
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    logger.debug(f"POST /dbproj/questions/<product_id>/<parent_question_id> - payload: {payload}")
+    # check if product exists
+    statement = "SELECT * FROM produto WHERE id=%s"
+    values = (product_id,)
+    cur.execute(statement, values)
+    if cur.fetchall() == []:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "product with chosen id does not exist",
+        }
+        return flask.jsonify(response)
+
+    # check if parent question exists and is related to product
+    statement = "SELECT * FROM thread WHERE id=%s and produto_id=%s"
+    values = (parent_question_id, product_id)
+    cur.execute(statement, values)
+    if cur.fetchall() == []:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "parent question with chosen id does not exist regarding this product",
+        }
+        return flask.jsonify(response)
+
+    # do not forget to validate every argument, e.g.,:
+    if "question" not in payload:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "rating value is required to leave a review",
+        }
+        return flask.jsonify(response)
+
+    if "token" not in payload:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "token is required to make an order",
+        }
+        return flask.jsonify(response)
+
+    auth_payload = jwt.decode(payload["token"], jwt_secret, algorithms="HS256")
+
+    # check if current user is a buyer,admin or seller of the current chosen product
+    if auth_payload["auth_role"] == "vendedor":
+        statement = "SELECT vendedor_utilizador_id from produto WHERE id=%s"
+        values = (product_id,)
+        cur.execute(statement, values)
+        seller_id = cur.fetchone()[0]
+        if seller_id != auth_payload["auth_id"]:
+            response = {
+                "status": StatusCodes["api_error"],
+                "results": "sellers are not allowed to comment on other seller's products",
+            }
+            return flask.jsonify(response)
+
+    # create response
+    statement = "INSERT INTO resposta(username,resposta,thread_id) VALUES(%s,%s,%s)"
+    values = (auth_payload["auth_user"], payload["question"], parent_question_id)
+
+    try:
+        cur.execute(statement, values)
+        question_id = cur.fetchone()[0]
+        response = {"status": StatusCodes["success"], "results": f"{question_id}"}
+
+        # commit the transaction
+        conn.commit()
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(error)
+        response = {"status": StatusCodes["internal_error"], "errors": str(error)}
+
+        # an error occurred, rollback
+        conn.rollback()
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return flask.jsonify(response)
+
 
 ##########################################################
 ## ESTATÍSTICAS

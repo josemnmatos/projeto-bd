@@ -19,7 +19,7 @@ Endpoints:
 
 5. Efetuar compra - FEITO(no entanto é preciso ver melhor a nível do isolamento das transações?)
 
-6. Deixar rating/feedback - POR FAZER
+6. Deixar rating/feedback - FEITO
 
 7. Deixar comentário/pergunta - POR FAZER
 

@@ -71,25 +71,25 @@ CREATE TABLE comprador (
 
 CREATE TABLE rating (
 	classificacao		 SMALLINT NOT NULL,
+	comentario VARCHAR(512),
 	comprador_utilizador_id INTEGER,
 	produto_id		 BIGINT,
 	PRIMARY KEY(comprador_utilizador_id,produto_id)
 );
 
 CREATE TABLE thread (
-	t_id	 SERIAL,
+	id	 SERIAL,
 	username	 VARCHAR(512) NOT NULL,
 	pergunta	 VARCHAR(512) NOT NULL,
 	produto_id BIGINT,
-	PRIMARY KEY(t_id)
+	PRIMARY KEY(id)
 );
 
 CREATE TABLE resposta (
 	username				 VARCHAR(512) NOT NULL,
 	resposta				 VARCHAR(512) NOT NULL,
-	notificacao_resposta_notificacao_id BIGINT NOT NULL,
-	thread_id				 BIGINT UNIQUE NOT NULL,
-	thread_produto_id			 BIGINT NOT NULL
+	notificacao_resposta_notificacao_id BIGINT,
+	thread_id				 BIGINT NOT NULL
 );
 
 CREATE TABLE encomenda (
@@ -155,9 +155,8 @@ ALTER TABLE vendedor ADD CONSTRAINT vendedor_fk1 FOREIGN KEY (utilizador_id) REF
 ALTER TABLE comprador ADD CONSTRAINT comprador_fk1 FOREIGN KEY (utilizador_id) REFERENCES utilizador(id);
 ALTER TABLE rating ADD CONSTRAINT rating_fk1 FOREIGN KEY (comprador_utilizador_id) REFERENCES comprador(utilizador_id);
 ALTER TABLE rating ADD CONSTRAINT rating_fk2 FOREIGN KEY (produto_id) REFERENCES produto(id);
-ALTER TABLE thread ADD CONSTRAINT thread_fk1 FOREIGN KEY (produto_id) REFERENCES produto(id);
 ALTER TABLE resposta ADD CONSTRAINT resposta_fk1 FOREIGN KEY (notificacao_resposta_notificacao_id) REFERENCES notificacao_resposta(notificacao_id);
-ALTER TABLE resposta ADD CONSTRAINT resposta_fk2 FOREIGN KEY (thread_id) REFERENCES thread(t_id);
+ALTER TABLE resposta ADD CONSTRAINT resposta_fk2 FOREIGN KEY (thread_id) REFERENCES thread(id);
 ALTER TABLE encomenda ADD CONSTRAINT encomenda_fk1 FOREIGN KEY (notificacao_encomenda_notificacao_id) REFERENCES notificacao_encomenda(notificacao_id);
 ALTER TABLE encomenda ADD CONSTRAINT encomenda_fk2 FOREIGN KEY (comprador_utilizador_id) REFERENCES comprador(utilizador_id);
 ALTER TABLE item_encomenda ADD CONSTRAINT item_encomenda_fk1 FOREIGN KEY (encomenda_id) REFERENCES encomenda(id);
