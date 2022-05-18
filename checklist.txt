@@ -21,13 +21,14 @@ Endpoints:
 
 6. Deixar rating/feedback - FEITO
 
-7. Deixar comentário/pergunta - POR FAZER
+7. Deixar comentário/pergunta - FEITO, mas falta rever
 
 8.Consultar	informações	genéricas de	um	produto - POR FAZER
 ->com UMA query
 
 9.Obter	estatísticas	(por mês) nos últimos 12	meses. - POR FAZER
 ->com UMA query
+
 ************************************
 
 !!!!!!!!!!!!!!!!!!!!! - FALTA FAZER

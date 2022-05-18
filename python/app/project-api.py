@@ -701,11 +701,12 @@ def criar_thread(product_id):
 
     return flask.jsonify(response)
 
-#POR TESTAR!!!!
+
+# POR TESTAR!!!!
 ## Responder a pergunta existente-POST
 ##-----------------------------------------------
 @app.route("/dbproj/questions/<product_id>/<parent_question_id>", methods=["POST"])
-def criar_thread(product_id, parent_question_id):
+def responder_a_thread(product_id, parent_question_id):
     logger.info("POST /dbproj/questions/<product_id>/<parent_question_id>")
     payload = flask.request.get_json()
 
