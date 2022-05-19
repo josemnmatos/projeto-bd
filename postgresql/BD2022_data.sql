@@ -217,18 +217,42 @@ $$;
 CREATE FUNCTION notf_order() RETURNS TRIGGER
 LANGUAGE PLPGSQL
 AS $$
+DECLARE cur_seller_id CURSOR FOR SELECT vendedor_utilizador_id FROM produto WHERE id=new.produto_id;
 BEGIN
-INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao) VALUES(DEFAULT,FORMAT("Fez uma nova encomenda:\nID:%s",new.id),FALSE,CURRENT_TIMESTAMP);
+open cur_seller_id;
+FETCH cur_seller_id INTO seller_id;
+INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,FORMAT("Foram encomendadas %s unidades do seu produto com o id %s.",new.quantidade, new.produto_id),FALSE,CURRENT_TIMESTAMP,seller_id);
+RETURN NEW;
+close cur_seller_id;
 END;
 $$;
+
+CREATE FUNCTION notf_question() RETURNS TRIGGER
+LANGUAGE PLPGSQL
+AS $$
+DECLARE cur_seller_id CURSOR FOR SELECT vendedor_utilizador_id FROM produto WHERE id=new.produto_id;
+BEGIN
+open cur_seller_id;
+FETCH cur_seller_id INTO seller_id;
+INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,FORMAT("Foram encomendadas %s unidades do seu produto com o id %s.",new.quantidade, new.produto_id),FALSE,CURRENT_TIMESTAMP,seller_id);
+RETURN NEW;
+close cur_seller_id;
+END;
+$$;
+
 
 
 /*
 TRIGGERS
 */
+CREATE TRIGGER notf_question_trigger
+AFTER INSERT ON item_encomenda
+FOR EACH ROW
+EXECUTE PROCEDURE notf_question();
+
 
 CREATE TRIGGER notf_order_trigger
-AFTER INSERT ON encomenda
+AFTER INSERT ON item_encomenda
 FOR EACH ROW
 EXECUTE PROCEDURE notf_order();
 
