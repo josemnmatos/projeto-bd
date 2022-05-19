@@ -205,6 +205,8 @@ INSERT INTO administrador (utilizador_id) SELECT id from utilizador WHERE userna
 /*
 FUNCTIONS
 */
+
+
 CREATE FUNCTION save_old_specification() RETURNS TRIGGER
 LANGUAGE PLPGSQL
 AS $$
@@ -214,10 +216,14 @@ END;
 $$;
 
 
+/*
+SELLER NOTIFICATIONS
+*/
 CREATE FUNCTION notf_order() RETURNS TRIGGER
 LANGUAGE PLPGSQL
 AS $$
 DECLARE cur_seller_id CURSOR FOR SELECT vendedor_utilizador_id FROM produto WHERE id=new.produto_id;
+seller_id BIGINT;
 BEGIN
 open cur_seller_id;
 FETCH cur_seller_id INTO seller_id;
@@ -226,27 +232,52 @@ RETURN NEW;
 close cur_seller_id;
 END;
 $$;
+
 
 CREATE FUNCTION notf_question() RETURNS TRIGGER
 LANGUAGE PLPGSQL
 AS $$
-DECLARE cur_seller_id CURSOR FOR SELECT vendedor_utilizador_id FROM produto WHERE id=new.produto_id;
+DECLARE 
+cur_product_name CURSOR FOR SELECT descricao FROM produto WHERE id=new.produto_id;
+cur_seller_id CURSOR FOR SELECT vendedor_utilizador_id FROM produto WHERE id=new.produto_id;
+product_name VARCHAR(512);
+seller_id BIGINT;
 BEGIN
+open cur_product_name;
 open cur_seller_id;
+FETCH cur_product_name INTO cur_product_name;
 FETCH cur_seller_id INTO seller_id;
-INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,FORMAT("Foram encomendadas %s unidades do seu produto com o id %s.",new.quantidade, new.produto_id),FALSE,CURRENT_TIMESTAMP,seller_id);
+INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,FORMAT("Foi feita uma nova pergunta no seu produto: %s",product_name),FALSE,CURRENT_TIMESTAMP,seller_id);
 RETURN NEW;
 close cur_seller_id;
+close cur_product_name;
 END;
 $$;
 
+/*
+BUYER NOTIFICATIONS
+*/
+
+CREATE FUNCTION buyer_notf_order() RETURNS TRIGGER
+LANGUAGE PLPGSQL
+AS $$
+--DECLARE cur_seller_id CURSOR FOR SELECT vendedor_utilizador_id FROM produto WHERE id=new.produto_id;
+--seller_id BIGINT;
+BEGIN
+--open cur_seller_id;
+--FETCH cur_seller_id INTO seller_id;
+INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,FORMAT("A sua encomenda está confirmada.",new.quantidade, new.produto_id),FALSE,CURRENT_TIMESTAMP,new.comprador_utilizador_id);
+RETURN NEW;
+--close cur_seller_id;
+END;
+$$; 
 
 
 /*
-TRIGGERS
+TRIGGERS - FALTA COMPRADOR QUANDO EXISTE RESPOSTA A SUA PERGUNTA
 */
 CREATE TRIGGER notf_question_trigger
-AFTER INSERT ON item_encomenda
+AFTER INSERT ON thread
 FOR EACH ROW
 EXECUTE PROCEDURE notf_question();
 
@@ -255,6 +286,11 @@ CREATE TRIGGER notf_order_trigger
 AFTER INSERT ON item_encomenda
 FOR EACH ROW
 EXECUTE PROCEDURE notf_order();
+
+CREATE TRIGGER buyer_notf_order_trigger
+AFTER INSERT ON encomenda
+FOR EACH ROW
+EXECUTE PROCEDURE buyer_notf_order();
 
 
 CREATE TRIGGER save_old_specification_trigger
