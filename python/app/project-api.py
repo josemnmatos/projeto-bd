@@ -425,8 +425,38 @@ def atualiza_produto(product_id):
     return flask.jsonify(response)
 
 
-## Consultar informacao generica de um produto -GET
+## Consultar informacao generica de um produto -GET  
+## FALTA A PARTE DO PREÇO POR CAUSA DO HISTORICO#####
 ##-----------------------------------------------
+@app.route("/dbproj/product/<product_id>", methods=["GET"])
+def consultar_info(product_id):
+    logger.info("GET /dbproj/product/<product_id>")
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT p.descricao, p.preco, r.classificacao, r.comentario FROM produto p, rating r Where id=%s")
+        rows = cur.fetchall()
+
+        logger.debug("GET /dbproj/product/<product_id> - parse")
+        Results = []
+        for row in rows:
+            logger.debug(row)
+            content = {"descricao": row[0], "preco": row[1], "classificacao": row[2], "comentario": row[3]}
+            Results.append(content)  # appending to the payload to be returned
+
+        response = {"status": StatusCodes["success"], "results": Results}
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f"GET /dbproj/product/<product_id> - error: {error}")
+        response = {"status": StatusCodes["internal_error"], "errors": str(error)}
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return flask.jsonify(response)
 
 ##########################################################
 ## COMPRA
@@ -795,9 +825,38 @@ def responder_a_thread(product_id, parent_question_id):
 ##########################################################
 ## ESTATÍSTICAS
 ##########################################################
-
+##FALTA A PARTE DO SELECT PARA SABER COMO É A DATA#
 ## Obter estatísticas (por mes) dos ultimos 12 meses-GET
 ##-----------------------------------------------
+@app.route("/proj/report/year", methods=["GET"])
+def obter_estat():
+    logger.info("GET /proj/report/year")
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT ")
+        rows = cur.fetchall()
+
+        logger.debug("GET /proj/report/year - parse")
+        Results = []
+        for row in rows:
+            logger.debug(row)
+            content = {"mes": row[0], "valor": row[1], "total_vendas": row[2]}
+            Results.append(content)  # appending to the payload to be returned
+
+        response = {"status": StatusCodes["success"], "results": Results}
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f"GET /proj/report/year - error: {error}")
+        response = {"status": StatusCodes["internal_error"], "errors": str(error)}
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return flask.jsonify(response)
 
 
 ##########################################################
