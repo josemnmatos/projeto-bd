@@ -1,3 +1,4 @@
+from concurrent.futures import thread
 import flask
 import logging, psycopg2, time
 import jwt
@@ -8,6 +9,14 @@ jwt_secret = "bdprojeto"
 app = flask.Flask(__name__)
 
 StatusCodes = {"success": 200, "api_error": 400, "internal_error": 500}
+
+
+# types of product allowed (only 3 for testing)
+allowed_types = ["tv", "smartphone", "computer"]
+# types of specs allowed for each product (only one for testing)
+tv_allowed_specs = ["size"]
+smartphone_allowed_specs = ["os"]
+computer_allowed_specs = ["cpu"]
 
 ##########################################################
 ## DATABASE ACCESS
@@ -268,14 +277,14 @@ def get_all_products():
     cur = conn.cursor()
 
     try:
-        cur.execute("SELECT id, descricao, preco,stock FROM produto ORDER BY id")
+        cur.execute("SELECT id,tipo, descricao, preco,stock FROM produto ORDER BY id")
         rows = cur.fetchall()
 
         logger.debug("GET /dbproj/product - parse")
         Results = []
         for row in rows:
             logger.debug(row)
-            content = {"id": int(row[0]), "descricao": row[1], "preco": row[2], "stock": row[3]}
+            content = {"id": int(row[0]), "tipo": row[1], "description": row[2], "price": row[3], "stock": row[4]}
             Results.append(content)  # appending to the payload to be returned
 
         response = {"status": StatusCodes["success"], "results": Results}
@@ -304,21 +313,62 @@ def cria_produto():
     logger.debug(f"POST /dbproj/product - payload: {payload}")
 
     # do not forget to validate every argument, e.g.,:
-    if "descricao" not in payload:
-        response = {"status": StatusCodes["api_error"], "results": "descricao value not in payload"}
+
+    if "description" not in payload:
+        response = {"status": StatusCodes["api_error"], "results": "description value not in payload"}
         return flask.jsonify(response)
 
-    if "preco" not in payload:
-        response = {"status": StatusCodes["api_error"], "results": "preco value not in payload"}
+    if "price" not in payload:
+        response = {"status": StatusCodes["api_error"], "results": "pr value not in payload"}
         return flask.jsonify(response)
 
     if "stock" not in payload:
         response = {"status": StatusCodes["api_error"], "results": "stock value not in payload"}
         return flask.jsonify(response)
 
+    if "type" not in payload:
+        response = {"status": StatusCodes["api_error"], "results": "stock value not in payload"}
+        return flask.jsonify(response)
+
+    if "spec_name" not in payload:
+        response = {"status": StatusCodes["api_error"], "results": "spec_name not in payload"}
+        return flask.jsonify(response)
+
+    if "spec_value" not in payload:
+        response = {"status": StatusCodes["api_error"], "results": "spec_value not in payload"}
+        return flask.jsonify(response)
+
     if "token" not in payload:
         response = {"status": StatusCodes["api_error"], "results": "token value not in payload"}
         return flask.jsonify(response)
+
+    # check specs
+    if payload["type"] not in allowed_types:
+        response = {"status": StatusCodes["api_error"], "results": "type value not allowed"}
+        return flask.jsonify(response)
+    elif payload["type"] == "tv":
+        # check for size
+        if payload["spec_name"] != "size":
+            response = {
+                "status": StatusCodes["api_error"],
+                "results": "size spec needed to register product of type tv",
+            }
+            return flask.jsonify(response)
+
+    elif payload["type"] == "smartphone":
+        # check for os
+        if payload["spec_name"] != "os":
+            response = {"status": StatusCodes["api_error"], "results": "os spec needed to register product of type tv"}
+            return flask.jsonify(response)
+
+    elif payload["type"] == "computer":
+        # check for cpu
+        if payload["spec_name"] != "cpu":
+            response = {
+                "status": StatusCodes["api_error"],
+                "results": "cpu spec needed to register product of type tv",
+            }
+            return flask.jsonify(response)
 
     # verifica se user é vendedor
 
@@ -332,16 +382,29 @@ def cria_produto():
         return flask.jsonify(response)
 
     # parameterized queries, good for security and performance
-    statement = "INSERT INTO produto (id, descricao, preco, stock, vendedor_utilizador_id) VALUES (DEFAULT, %s, %s,%s,%s) RETURNING id"
-    values = (payload["descricao"], float(payload["preco"]), int(payload["stock"]), auth_token["auth_id"])
+    statement1 = "INSERT INTO produto (id, descricao,tipo, preco, stock, vendedor_utilizador_id) VALUES (DEFAULT,%s, %s, %s,%s,%s) RETURNING id"
+    values1 = (
+        payload["description"],
+        payload["type"],
+        float(payload["price"]),
+        int(payload["stock"]),
+        auth_token["auth_id"],
+    )
+
+    statement2 = "INSERT INTO especificacao_atual(nome,valor,produto_id) VALUES(%s,%s,%s)"
 
     try:
         # executa e retorna id para adicionar ao produto
-        cur.execute(statement, values)
-        ret_id = cur.fetchone()[0]
+        cur.execute(statement1, values1)
+        product_id = cur.fetchone()[0]
+
+        # executa a adiçao da especificacao
+        values2 = (payload["spec_name"], payload["spec_value"], product_id)
+        cur.execute(statement2, values2)
+
         # commit the transaction
         conn.commit()
-        response = {"status": StatusCodes["success"], "results": f"{ret_id}"}
+        response = {"status": StatusCodes["success"], "results": f"{product_id}"}
 
     except (Exception, psycopg2.DatabaseError) as error:
         logger.error(f"POST /dbproj/product - error: {error}")
@@ -370,10 +433,10 @@ def atualiza_produto(product_id):
     logger.debug(f"PUT /dbproj/product/<product_id> - payload: {payload}")
 
     # do not forget to validate every argument, e.g.,:
-    if "descricao" not in payload or "preco" not in payload or "stock" not in payload:
+    if "description" not in payload and "price" not in payload and "stock" not in payload:
         response = {
             "status": StatusCodes["api_error"],
-            "results": "descricao,preco and stock are required to update",
+            "results": "descricao,preco or stock are required to update",
         }
         return flask.jsonify(response)
 
@@ -386,16 +449,51 @@ def atualiza_produto(product_id):
 
     # parameterized queries, good for security and performance
     # atualiza descricao
+
     statement = (
         "UPDATE produto SET descricao = %s, preco = %s, stock = %s WHERE id = %s RETURNING vendedor_utilizador_id"
     )
-    values = (payload["descricao"], payload["preco"], payload["stock"], product_id)
+    values = (payload["description"], payload["price"], payload["stock"], product_id)
 
     try:
+        # check if spec updates need to be done
+        if "spec_name" in payload:
+            if "spec_value" not in payload:
+                response = {"status": StatusCodes["api_error"], "results": "spec value needed in order to update spec"}
+                return flask.jsonify(response)
+            # if yes then get product type
+            stat = "SELECT tipo from produto WHERE id=%s"
+            values = (product_id,)
+            cur.execute(stat, values)
+            product_type = cur.fetchone()[0]
+            # check if spec meets product type
+            if product_type == "tv" and payload["spec_name"] not in tv_allowed_specs:
+                response = {"status": StatusCodes["api_error"], "results": "spec not allowed for product type tv"}
+                return flask.jsonify(response)
+
+            if product_type == "smartphone" and payload["spec_name"] not in smartphone_allowed_specs:
+                response = {
+                    "status": StatusCodes["api_error"],
+                    "results": "spec not allowed for product type smartphone",
+                }
+                return flask.jsonify(response)
+
+            if product_type == "computer" and payload["spec_name"] not in computer_allowed_specs:
+                response = {
+                    "status": StatusCodes["api_error"],
+                    "results": "spec not allowed for product type computer",
+                }
+                return flask.jsonify(response)
+
+            # update the spec
+            stat1 = "UPDATE especificacao_atual SET valor=%s WHERE produto_id=%s and nome=%s"
+            values1 = (payload["spec_value"], product_id, payload["spec_name"])
+            cur.execute(stat1, values1)
+
         cur.execute(statement, values)
 
         # vendedor não corresponde ao user atual
-        seller_id = cur.fetchone()
+        seller_id = cur.fetchone()[0]
 
         if seller_id is None:
             response = {"status": StatusCodes["api_error"], "results": "product with chosen id does not exist"}
@@ -425,7 +523,7 @@ def atualiza_produto(product_id):
     return flask.jsonify(response)
 
 
-## Consultar informacao generica de um produto -GET  
+## Consultar informacao generica de um produto -GET
 ## FALTA A PARTE DO PREÇO POR CAUSA DO HISTORICO#####
 ##-----------------------------------------------
 @app.route("/dbproj/product/<product_id>", methods=["GET"])
@@ -443,7 +541,7 @@ def consultar_info(product_id):
         Results = []
         for row in rows:
             logger.debug(row)
-            content = {"descricao": row[0], "preco": row[1], "classificacao": row[2], "comentario": row[3]}
+            content = {"description": row[0], "price": row[1], "classificacao": row[2], "comentario": row[3]}
             Results.append(content)  # appending to the payload to be returned
 
         response = {"status": StatusCodes["success"], "results": Results}
@@ -457,6 +555,7 @@ def consultar_info(product_id):
             conn.close()
 
     return flask.jsonify(response)
+
 
 ##########################################################
 ## COMPRA
@@ -697,6 +796,7 @@ def criar_thread(product_id):
         return flask.jsonify(response)
 
     auth_payload = jwt.decode(payload["token"], jwt_secret, algorithms="HS256")
+
     # check if current user is a buyer
     if auth_payload["auth_role"] != "comprador":
         response = {
@@ -706,13 +806,20 @@ def criar_thread(product_id):
         return flask.jsonify(response)
 
     # create thread
+    statement1 = "INSERT INTO thread(id,produto_id) VALUES(DEFAULT,%s,) RETURNING ID"
+    values1 = (product_id,)
 
-    statement = "INSERT INTO thread(id,username,pergunta,produto_id) VALUES(DEFAULT,%s,%s,%s) RETURNING id"
-    values = (auth_payload["auth_user"], payload["question"], product_id)
+    # create main question for new thread
+    statement2 = "INSERT INTO pergunta_resposta(id,username,texto,questao_pai_id,thread_id) VALUES(DEFAULT,%s,%s,NULL,%s) RETURNING id"
 
     try:
-        cur.execute(statement, values)
+        cur.execute(statement1, values1)
+        thread_id = cur.fetchone()[0]
+
+        values2 = (auth_payload["auth_user"], payload["question"], thread_id)
+        cur.execute(statement2, values2)
         question_id = cur.fetchone()[0]
+
         response = {"status": StatusCodes["success"], "results": f"{question_id}"}
 
         # commit the transaction
@@ -744,6 +851,7 @@ def responder_a_thread(product_id, parent_question_id):
     cur = conn.cursor()
 
     logger.debug(f"POST /dbproj/questions/<product_id>/<parent_question_id> - payload: {payload}")
+
     # check if product exists
     statement = "SELECT * FROM produto WHERE id=%s"
     values = (product_id,)
@@ -755,16 +863,31 @@ def responder_a_thread(product_id, parent_question_id):
         }
         return flask.jsonify(response)
 
-    # check if parent question exists and is related to product
-    statement = "SELECT * FROM thread WHERE id=%s and produto_id=%s"
-    values = (parent_question_id, product_id)
+    # check if parent question exists
+    statement = "SELECT thread_id FROM pergunta_resposta WHERE id=%s"
+    values = (parent_question_id,)
     cur.execute(statement, values)
-    if cur.fetchall() == []:
+    thread_id = cur.fetchone()[0]
+    # if not leave
+    if thread_id == None:
         response = {
             "status": StatusCodes["api_error"],
-            "results": "parent question with chosen id does not exist regarding this product",
+            "results": "parent question with chosen id does not exist",
         }
         return flask.jsonify(response)
+    # if exists check if it is related to the request product id
+    statement = "SELECT produto_id FROM thread WHERE id=%s"
+    values = (thread_id,)
+    parent_question_product_id = cur.fetchone()[0]
+
+    if parent_question_product_id != product_id:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "parent question with chosen id does not talk about the product with chosen id",
+        }
+        return flask.jsonify(response)
+
+    # check
 
     # do not forget to validate every argument, e.g.,:
     if "question" not in payload:
@@ -797,8 +920,8 @@ def responder_a_thread(product_id, parent_question_id):
             return flask.jsonify(response)
 
     # create response
-    statement = "INSERT INTO resposta(username,resposta,thread_id) VALUES(%s,%s,%s)"
-    values = (auth_payload["auth_user"], payload["question"], parent_question_id)
+    statement = "INSERT INTO pergunta_resposta(id,username,texto,questao_pai_id,thread_id) VALUES(DEFAULT,%s,%s,%s)"
+    values = (auth_payload["auth_user"], payload["question"], parent_question_id, thread_id)
 
     try:
         cur.execute(statement, values)
