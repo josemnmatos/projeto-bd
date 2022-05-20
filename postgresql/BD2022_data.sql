@@ -156,8 +156,6 @@ INSERT INTO administrador (utilizador_id) SELECT id from utilizador WHERE userna
 /*
 FUNCTIONS
 */
-
-
 CREATE FUNCTION save_old_specification() RETURNS TRIGGER
 LANGUAGE PLPGSQL
 AS $$
@@ -171,7 +169,7 @@ CREATE FUNCTION save_old_price() RETURNS TRIGGER
 LANGUAGE PLPGSQL
 AS $$
 BEGIN
-INSERT INTO historico_preco(preco,data_exp,produto_id) VALUES(old.preco,CURRENT_TIMESTAMP,old.produto_id,CURRENT_TIMESTAMP);
+INSERT INTO historico_preco(preco,produto_id,data_exp) SELECT preco,id,CURRENT_TIMESTAMP from produto WHERE id=old.id;
 RETURN NEW;
 END;
 $$;
@@ -203,12 +201,14 @@ cur_product_name CURSOR FOR SELECT descricao FROM produto WHERE id=new.produto_i
 cur_seller_id CURSOR FOR SELECT vendedor_utilizador_id FROM produto WHERE id=new.produto_id;
 product_name VARCHAR(512);
 seller_id BIGINT;
+msg VARCHAR(512) :='';
 BEGIN
 open cur_product_name;
 open cur_seller_id;
-FETCH cur_product_name INTO cur_product_name;
+FETCH cur_product_name INTO product_name;
 FETCH cur_seller_id INTO seller_id;
-INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,FORMAT("Foi feita uma nova pergunta no seu produto: %s",product_name),FALSE,CURRENT_TIMESTAMP,seller_id);
+msg:='Foi feita uma nova pergunta no seu produto: '||product_name;
+INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,msg,FALSE,CURRENT_TIMESTAMP,seller_id);
 RETURN NEW;
 close cur_seller_id;
 close cur_product_name;
@@ -255,11 +255,11 @@ EXECUTE PROCEDURE buyer_notf_order();
 
 
 CREATE TRIGGER save_old_specification_trigger
-AFTER UPDATE ON especificacao_atual
+BEFORE UPDATE ON especificacao_atual
 FOR EACH ROW
 EXECUTE PROCEDURE save_old_specification();
 
 CREATE TRIGGER save_old_price_trigger
-AFTER UPDATE OF preco ON produto
+BEFORE UPDATE OF preco ON produto
 FOR EACH ROW
 EXECUTE PROCEDURE save_old_price();

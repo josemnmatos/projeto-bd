@@ -1,4 +1,3 @@
-from concurrent.futures import thread
 import flask
 import logging, psycopg2, time
 import jwt
@@ -432,6 +431,17 @@ def atualiza_produto(product_id):
 
     logger.debug(f"PUT /dbproj/product/<product_id> - payload: {payload}")
 
+    # check if product exists
+    stat = "SELECT * FROM produto where id=%s"
+    val = (product_id,)
+    cur.execute(stat, val)
+    if cur.fetchall() == []:
+        response = {
+            "status": StatusCodes["api_error"],
+            "results": "product with chosen id does not exist",
+        }
+        return flask.jsonify(response)
+
     # do not forget to validate every argument, e.g.,:
     if "description" not in payload and "price" not in payload and "stock" not in payload:
         response = {
@@ -449,12 +459,6 @@ def atualiza_produto(product_id):
 
     # parameterized queries, good for security and performance
     # atualiza descricao
-
-    statement = (
-        "UPDATE produto SET descricao = %s, preco = %s, stock = %s WHERE id = %s RETURNING vendedor_utilizador_id"
-    )
-    values = (payload["description"], payload["price"], payload["stock"], product_id)
-
     try:
         # check if spec updates need to be done
         if "spec_name" in payload:
@@ -490,17 +494,16 @@ def atualiza_produto(product_id):
             values1 = (payload["spec_value"], product_id, payload["spec_name"])
             cur.execute(stat1, values1)
 
-        cur.execute(statement, values)
+        statement = (
+            "UPDATE produto SET descricao = %s, preco = %s, stock = %s WHERE id = %s RETURNING vendedor_utilizador_id"
+        )
+        values = (payload["description"], payload["price"], payload["stock"], product_id)
 
+        cur.execute(statement, values)
         # vendedor não corresponde ao user atual
         seller_id = cur.fetchone()[0]
 
-        if seller_id is None:
-            response = {"status": StatusCodes["api_error"], "results": "product with chosen id does not exist"}
-            conn.rollback()
-            return flask.jsonify(response)
-
-        if seller_id[0] != auth_payload["auth_id"]:
+        if seller_id != auth_payload["auth_id"]:
             response = {"status": StatusCodes["api_error"], "results": "current user is not seller of product chosen"}
             conn.rollback()
             return flask.jsonify(response)
@@ -533,8 +536,12 @@ def consultar_info(product_id):
     conn = db_connection()
     cur = conn.cursor()
 
+    statement="SELECT description,"
+    values=(product_id,)
+
     try:
-        cur.execute("SELECT p.descricao, p.preco, r.classificacao, r.comentario FROM produto p, rating r Where id=%s")
+        
+        cur.execute(statement,values)
         rows = cur.fetchall()
 
         logger.debug("GET /dbproj/product/<product_id> - parse")
@@ -806,7 +813,7 @@ def criar_thread(product_id):
         return flask.jsonify(response)
 
     # create thread
-    statement1 = "INSERT INTO thread(id,produto_id) VALUES(DEFAULT,%s,) RETURNING ID"
+    statement1 = "INSERT INTO thread(id,produto_id) VALUES(DEFAULT,%s) RETURNING ID"
     values1 = (product_id,)
 
     # create main question for new thread
@@ -875,6 +882,7 @@ def responder_a_thread(product_id, parent_question_id):
             "results": "parent question with chosen id does not exist",
         }
         return flask.jsonify(response)
+
     # if exists check if it is related to the request product id
     statement = "SELECT produto_id FROM thread WHERE id=%s"
     values = (thread_id,)
