@@ -534,22 +534,45 @@ def consultar_info(product_id):
     logger.info("GET /dbproj/product/<product_id>")
 
     conn = db_connection()
-    cur = conn.cursor()
+    comments_cur = conn.cursor()
+    rating_cur = conn.cursor()
+    price_cur = conn.cursor()
+    product_cur = conn.cursor()
 
-    statement="SELECT description,"
-    values=(product_id,)
+    comments_statement = (
+        "SELECT texto from pergunta_resposta WHERE thread_id IN(SELECT id from thread where produto_id =%s)"
+    )
+
+    rating_statement = "SELECT AVG(classificacao) from rating WHERE produto_id=%s"
+
+    price_statement = "SELECT preco,data_exp from historico_preco WHERE produto_id=%s "
+
+    product_statement = "SELECT descricao,tipo,preco,stock from produto where id=%s"
+    values = (product_id,)
 
     try:
-        
-        cur.execute(statement,values)
-        rows = cur.fetchall()
+
+        comments_cur.execute(comments_statement, values)
+        rating_cur.execute(rating_statement, values)
+        price_cur.execute(price_statement, values)
+        product_cur.execute(product_statement, values)
+        comments_rows = comments_cur.fetchall()
+        rating_rows = rating_cur.fetchall()
+        price_rows = price_cur.fetchall()
+        product_rows = product_cur.fetchall()
 
         logger.debug("GET /dbproj/product/<product_id> - parse")
         Results = []
-        for row in rows:
-            logger.debug(row)
-            content = {"description": row[0], "price": row[1], "classificacao": row[2], "comentario": row[3]}
-            Results.append(content)  # appending to the payload to be returned
+
+        content = {
+            "description": product_rows[0],
+            "stock": product_rows[3],
+            "current_price": product_rows[2],
+            "type": product_rows[1],
+            "rating": rating_rows[0],
+            "comments": comments_rows,
+        }
+        Results.append(content)  # appending to the payload to be returned
 
         response = {"status": StatusCodes["success"], "results": Results}
 
