@@ -97,6 +97,7 @@ CREATE TABLE pergunta_resposta (
 CREATE TABLE encomenda (
 	id					 SERIAL,
 	data				 TIMESTAMP NOT NULL,
+	valor_total FLOAT(8) ,
 	notificacao_encomenda_notificacao_id BIGINT,
 	comprador_utilizador_id	 INTEGER NOT NULL,
 	PRIMARY KEY(id)
@@ -183,10 +184,12 @@ LANGUAGE PLPGSQL
 AS $$
 DECLARE cur_seller_id CURSOR FOR SELECT vendedor_utilizador_id FROM produto WHERE id=new.produto_id;
 seller_id BIGINT;
+msg VARCHAR(512) :='';
 BEGIN
 open cur_seller_id;
 FETCH cur_seller_id INTO seller_id;
-INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,FORMAT("Foram encomendadas %s unidades do seu produto com o id %s.",new.quantidade, new.produto_id),FALSE,CURRENT_TIMESTAMP,seller_id);
+msg:='Foram encomendadas '|| new.quantidade ||' unidades do seu produto com o id ' || new.produto_id;
+INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,msg,FALSE,CURRENT_TIMESTAMP,seller_id);
 RETURN NEW;
 close cur_seller_id;
 END;
@@ -224,10 +227,12 @@ LANGUAGE PLPGSQL
 AS $$
 --DECLARE cur_seller_id CURSOR FOR SELECT vendedor_utilizador_id FROM produto WHERE id=new.produto_id;
 --seller_id BIGINT;
+DECLARE
 BEGIN
 --open cur_seller_id;
 --FETCH cur_seller_id INTO seller_id;
-INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,FORMAT("A sua encomenda está confirmada.",new.quantidade, new.produto_id),FALSE,CURRENT_TIMESTAMP,new.comprador_utilizador_id);
+
+INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,'A sua encomenda está confirmada.',FALSE,CURRENT_TIMESTAMP,new.comprador_utilizador_id);
 RETURN NEW;
 --close cur_seller_id;
 END;

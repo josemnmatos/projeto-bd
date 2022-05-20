@@ -53,6 +53,15 @@ def get_user_permission(id):
     return "comprador"
 
 
+def get_product_price(product_id):
+    conn = db_connection()
+    cur = conn.cursor()
+    values = (product_id,)
+    statement = "SELECT preco from produto where id=%s"
+    cur.execute(statement, values)
+    return int(cur.fetchone()[0])
+
+
 ##########################################################
 ## ENDPOINTS
 ##########################################################
@@ -565,12 +574,13 @@ def consultar_info(product_id):
         Results = []
 
         content = {
-            "description": product_rows[0],
-            "stock": product_rows[3],
-            "current_price": product_rows[2],
-            "type": product_rows[1],
+            "description": product_rows[0][0],
+            "stock": product_rows[0][3],
+            "current_price": product_rows[0][2],
+            "type": product_rows[0][1],
             "rating": rating_rows[0],
             "comments": comments_rows,
+            "past_prices": price_rows,
         }
         Results.append(content)  # appending to the payload to be returned
 
@@ -654,9 +664,11 @@ def efetuar_compra():
         cur.execute(statement, values)
         id_encomenda = cur.fetchone()[0]
         # insert every order item
+
         for order_item in payload["cart"]:
             item_product_id = order_item[0]
             item_product_quantity = order_item[1]
+
             # check stock and insert into sale item table
             statement = "INSERT INTO item_encomenda(quantidade,encomenda_id,produto_id) VALUES(%s,%s,%s)"
             values = (item_product_quantity, id_encomenda, item_product_id)
@@ -665,6 +677,8 @@ def efetuar_compra():
             statement = " UPDATE produto SET stock = stock - %s WHERE id=%s"
             values = (item_product_quantity, item_product_id)
             cur.execute(statement, values)
+
+
 
         response = {"status": StatusCodes["success"], "results": f"{id_encomenda}"}
 
@@ -982,28 +996,68 @@ def responder_a_thread(product_id, parent_question_id):
 ##FALTA A PARTE DO SELECT PARA SABER COMO É A DATA#
 ## Obter estatísticas (por mes) dos ultimos 12 meses-GET
 ##-----------------------------------------------
-@app.route("/proj/report/year", methods=["GET"])
+@app.route("/dbproj/report/year", methods=["GET"])
 def obter_estat():
-    logger.info("GET /proj/report/year")
+    logger.info("GET /dbproj/report/year")
 
     conn = db_connection()
     cur = conn.cursor()
 
     try:
-        cur.execute("SELECT ")
+        cur.execute(
+            "SELECT DATE_TRUNC('month',data),COUNT(id) from encomenda WHERE data >= NOW() - INTERVAL '12 months' GROUP BY DATE_TRUNC('month',data)"
+        )
         rows = cur.fetchall()
 
-        logger.debug("GET /proj/report/year - parse")
+        logger.debug("GET /dbproj/report/year - parse")
         Results = []
         for row in rows:
             logger.debug(row)
-            content = {"mes": row[0], "valor": row[1], "total_vendas": row[2]}
+            content = {"mes": str(row[0].month) + "/" + str(row[0].year), "total_vendas": row[1]}
             Results.append(content)  # appending to the payload to be returned
 
         response = {"status": StatusCodes["success"], "results": Results}
 
     except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f"GET /proj/report/year - error: {error}")
+        logger.error(f"GET /dbproj/report/year - error: {error}")
+        response = {"status": StatusCodes["internal_error"], "errors": str(error)}
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return flask.jsonify(response)
+
+
+##########################################################
+## NOTIFICAÇÕES
+##########################################################
+
+## Obter todas as notificacoes de um user(teste dos triggers)
+##-----------------------------------------------
+@app.route("/dbproj/notifications/<user_id>", methods=["GET"])
+def get_all_notifications(user_id):
+    logger.info("GET /dbproj/notifications/<user_id>")
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT id,mensagem,data_rececao from notificacao where utilizador_id=%s", (user_id,))
+
+        rows = cur.fetchall()
+
+        logger.debug("GET /dbproj/notifications/<user_id> - parse")
+        Results = []
+        for row in rows:
+            logger.debug(row)
+            content = {"id": int(row[0]), "texto": row[1], "data_rececao": row[2]}
+            Results.append(content)  # appending to the payload to be returned
+
+        response = {"status": StatusCodes["success"], "results": Results}
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f"GET /dbproj/product - error: {error}")
         response = {"status": StatusCodes["internal_error"], "errors": str(error)}
 
     finally:
