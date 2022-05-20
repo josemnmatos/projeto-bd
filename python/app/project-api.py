@@ -678,8 +678,6 @@ def efetuar_compra():
             values = (item_product_quantity, item_product_id)
             cur.execute(statement, values)
 
-
-
         response = {"status": StatusCodes["success"], "results": f"{id_encomenda}"}
 
         # commit the transaction

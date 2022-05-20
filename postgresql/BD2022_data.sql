@@ -124,27 +124,15 @@ CREATE TABLE notificacao (
 ADD CONSTRAINTS FOR FOREIGN KEYS
 */
 ALTER TABLE produto ADD CONSTRAINT produto_fk1 FOREIGN KEY (vendedor_utilizador_id) REFERENCES vendedor(utilizador_id);
---ALTER TABLE televisao ADD CONSTRAINT televisao_fk1 FOREIGN KEY (produto_id) REFERENCES produto(id);
---ALTER TABLE computador ADD CONSTRAINT computador_fk1 FOREIGN KEY (produto_id) REFERENCES produto(id);
---ALTER TABLE smartphone ADD CONSTRAINT smartphone_fk1 FOREIGN KEY (produto_id) REFERENCES produto(id);
 ALTER TABLE administrador ADD CONSTRAINT administrador_fk1 FOREIGN KEY (utilizador_id) REFERENCES utilizador(id);
 ALTER TABLE vendedor ADD CONSTRAINT vendedor_fk1 FOREIGN KEY (utilizador_id) REFERENCES utilizador(id);
 ALTER TABLE comprador ADD CONSTRAINT comprador_fk1 FOREIGN KEY (utilizador_id) REFERENCES utilizador(id);
 ALTER TABLE rating ADD CONSTRAINT rating_fk1 FOREIGN KEY (comprador_utilizador_id) REFERENCES comprador(utilizador_id);
 ALTER TABLE rating ADD CONSTRAINT rating_fk2 FOREIGN KEY (produto_id) REFERENCES produto(id);
---ALTER TABLE pergunta_resposta ADD CONSTRAINT resposta_fk1 FOREIGN KEY (notificacao_resposta_notificacao_id) REFERENCES notificacao_resposta(notificacao_id);
 ALTER TABLE pergunta_resposta ADD CONSTRAINT resposta_fk2 FOREIGN KEY (thread_id) REFERENCES thread(id);
---ALTER TABLE encomenda ADD CONSTRAINT encomenda_fk1 FOREIGN KEY (notificacao_encomenda_notificacao_id) REFERENCES notificacao_encomenda(notificacao_id);
 ALTER TABLE encomenda ADD CONSTRAINT encomenda_fk2 FOREIGN KEY (comprador_utilizador_id) REFERENCES comprador(utilizador_id);
 ALTER TABLE item_encomenda ADD CONSTRAINT item_encomenda_fk1 FOREIGN KEY (encomenda_id) REFERENCES encomenda(id);
 ALTER TABLE item_encomenda ADD CONSTRAINT item_encomenda_fk2 FOREIGN KEY (produto_id) REFERENCES produto(id);
---ALTER TABLE versao_antiga ADD CONSTRAINT versao_antiga_fk1 FOREIGN KEY (produto_id) REFERENCES produto(id);
---ALTER TABLE notificacao_resposta ADD CONSTRAINT notificacao_resposta_fk1 FOREIGN KEY (notificacao_id) REFERENCES notificacao(id);
---ALTER TABLE notificacao_encomenda ADD CONSTRAINT notificacao_encomenda_fk1 FOREIGN KEY (notificacao_id) REFERENCES notificacao(id);
---LTER TABLE comprador_notificacao_resposta ADD CONSTRAINT comprador_notificacao_resposta_fk1 FOREIGN KEY (comprador_utilizador_id) REFERENCES comprador(utilizador_id);
---ALTER TABLE comprador_notificacao_resposta ADD CONSTRAINT comprador_notificacao_resposta_fk2 FOREIGN KEY (notificacao_resposta_notificacao_id) REFERENCES notificacao_resposta(notificacao_id);
---ALTER TABLE vendedor_notificacao_encomenda ADD CONSTRAINT vendedor_notificacao_encomenda_fk1 FOREIGN KEY (vendedor_utilizador_id) REFERENCES vendedor(utilizador_id);
---ALTER TABLE vendedor_notificacao_encomenda ADD CONSTRAINT vendedor_notificacao_encomenda_fk2 FOREIGN KEY (notificacao_encomenda_notificacao_id) REFERENCES notificacao_encomenda(notificacao_id);
 
 /*
 BASE VALUES
@@ -226,16 +214,9 @@ BUYER NOTIFICATIONS
 CREATE FUNCTION buyer_notf_order() RETURNS TRIGGER
 LANGUAGE PLPGSQL
 AS $$
---DECLARE cur_seller_id CURSOR FOR SELECT vendedor_utilizador_id FROM produto WHERE id=new.produto_id;
---seller_id BIGINT;
 DECLARE
-BEGIN
---open cur_seller_id;
---FETCH cur_seller_id INTO seller_id;
-
 INSERT INTO notificacao(id,mensagem,estado_leitura,data_rececao,utilizador_id) VALUES(DEFAULT,'A sua encomenda está confirmada.',FALSE,CURRENT_TIMESTAMP,new.comprador_utilizador_id);
 RETURN NEW;
---close cur_seller_id;
 END;
 $$; 
 
