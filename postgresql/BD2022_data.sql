@@ -179,6 +179,7 @@ $$;
 /*
 SELLER NOTIFICATIONS
 */
+/*
 CREATE FUNCTION notf_order() RETURNS TRIGGER
 LANGUAGE PLPGSQL
 AS $$
@@ -194,7 +195,7 @@ RETURN NEW;
 close cur_seller_id;
 END;
 $$;
-
+*/
 
 CREATE FUNCTION notf_question() RETURNS TRIGGER
 LANGUAGE PLPGSQL
@@ -247,11 +248,12 @@ AFTER INSERT ON thread
 FOR EACH ROW
 EXECUTE PROCEDURE notf_question();
 
-
+/*
 CREATE TRIGGER notf_order_trigger
 AFTER INSERT ON item_encomenda
 FOR EACH ROW
 EXECUTE PROCEDURE notf_order();
+*/
 
 CREATE TRIGGER buyer_notf_order_trigger
 AFTER INSERT ON encomenda
